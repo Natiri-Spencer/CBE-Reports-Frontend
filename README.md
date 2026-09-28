@@ -1,4 +1,4 @@
-echo "# 📊 CBE Reports - Frontend
+# 📊 CBE Reports - Frontend
 
 This is the **React frontend** for the CBE Reports system.  
 It provides a user-friendly interface for students, teachers, and administrators to interact with the backend services.
@@ -9,30 +9,16 @@ It provides a user-friendly interface for students, teachers, and administrators
 - Forms for entering marks and managing student data
 - Integration with FastAPI backend
 
-## 🛠️ Tech Used
+## 🛠️ Tech Stack
 - React
-- JavaScript (ES6+)
+- JavaScript 
 - npm
 - Axios
 - React Router
 - HTML5 / CSS3
 - Environment Variables (.env)
 
-## 📂 Project Structure
-student_reports_frontend/
-├── public/
-│   └── index.html
-├── src/
-│   ├── App.jsx
-│   ├── App.js
-│   ├── api.js
-│   ├── components/
-│   ├── index.js
-│   └── index.jsx
-├── .env
-├── .gitignore
-├── package.json
-├── package-lock.json
+
 
 ## ⚙️ Setup
 1. Clone the repo:
@@ -47,7 +33,3 @@ student_reports_frontend/
 
 ## 🔗 Related Repositories
 - Backend (FastAPI): https://github.com/Natiri-Spencer/CBE-Reports
-
-## 👨‍💻 Author
-Developed by Spencer Natiri
-" | Out-File -FilePath README.md -Encoding utf8 -NoClobber
