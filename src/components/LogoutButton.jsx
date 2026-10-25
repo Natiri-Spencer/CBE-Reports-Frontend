@@ -1,39 +1,12 @@
-import React from "react";
-import { API_URL } from "../config";
-import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import React, { useState } from "react";
 
+import { logout } from "../api";
+export default function LogoutButton({ onLogout }) {
 
-function LogoutButton({ onLogout }) {
-  const navigate = useNavigate();
-
+  const [error, setError] = useState("");
   async function handleLogout() {
-    try {
-      // Call backend logout endpoint
-      await axios.post(`${API_URL}/auth/logout`);
-
-      // Clear JWT from localStorage
-      localStorage.removeItem("token");
-
-      // Update parent state if provided
-      if (onLogout) onLogout();
-
-      // Redirect to login
-      navigate("/login");
-    } catch (err) {
-      console.error("❌ Logout error:", err);
-      // Even if backend fails, clear token client-side
-      localStorage.removeItem("token");
-      if (onLogout) onLogout();
-      navigate("/login");
-    }
+    try { if (onLogout) await onLogout(); else { await logout(); window.location.assign("/login"); } }
+    catch { setError("Could not revoke the session. Check your connection and retry logout."); }
   }
-
-  return (
-    <button onClick={handleLogout} style={{ marginTop: "20px" }}>
-      Logout
-    </button>
-  );
+  return <><button onClick={handleLogout}>Logout</button>{error && <p role="alert">{error}</p>}</>;
 }
-
-export default LogoutButton;

@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import LearnerPicker from "./LearnerPicker";
 import {
   getReports,
   downloadReport,
@@ -25,6 +26,12 @@ const AdminDashboard = ({ token, role }) => {   // accept role as prop
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [feeMessage, setFeeMessage] = useState("");
+  const [savingFee, setSavingFee] = useState(false);
+  const feePending = useRef(false);
+  const paymentsPending = useRef(new Set());
+  const [savingPayments, setSavingPayments] = useState({});
+  const [selectedLearner, setSelectedLearner] = useState(null);
+  const [reportOffset, setReportOffset] = useState(0);
 
   useEffect(() => {
     const loadAdminData = async () => {
@@ -52,11 +59,11 @@ const AdminDashboard = ({ token, role }) => {   // accept role as prop
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    getReports(token, academicYear, term)
+    getReports(token, academicYear, term, reportOffset)
       .then((data) => { if (!cancelled) setDashboard(data); })
       .catch((err) => { if (!cancelled) setError(err.message || "Failed to load dashboard."); });
     return () => { cancelled = true; };
-  }, [token, academicYear, term]);
+  }, [token, academicYear, term, reportOffset]);
 
   const handleFeeChange = (event) => {
     const { name, value } = event.target;
@@ -66,6 +73,7 @@ const AdminDashboard = ({ token, role }) => {   // accept role as prop
   const handleTermChange = (event) => {
     const nextTerm = Number(event.target.value);
     setTerm(nextTerm);
+    setReportOffset(0);
     if (nextTerm === 0) setAcademicYear(0);
     else if (academicYear === 0) setAcademicYear(calendar?.academic_year || new Date().getFullYear());
     setFeeForm((current) => ({ ...current, term: nextTerm, academic_year: nextTerm === 0 ? 0 : (academicYear || new Date().getFullYear()) }));
@@ -74,26 +82,34 @@ const AdminDashboard = ({ token, role }) => {   // accept role as prop
   const handleYearChange = (event) => {
     const nextYear = Number(event.target.value);
     setAcademicYear(nextYear);
+    setReportOffset(0);
     setFeeForm((current) => ({ ...current, academic_year: nextYear }));
   };
 
   const handleFeeSubmit = async (event) => {
     event.preventDefault();
+    if (feePending.current) return;
     setError("");
     setFeeMessage("");
     const payload = Object.fromEntries(
       Object.entries(feeForm).map(([key, value]) => [
         key,
-        ["learner_name", "grade"].includes(key) ? value.trim() : Number(value || 0),
+        ["learner_id", "grade"].includes(key) ? value.trim() : Number(value || 0),
       ])
     );
     payload.academic_year = academicYear;
     payload.term = term;
+    if (!payload.learner_id || !payload.grade) {
+      setError("Select a learner and enter the class.");
+      return;
+    }
+    feePending.current = true;
+    setSavingFee(true);
     try {
       const saved = await saveFee(payload, token);
       setFeeRecords((current) => {
         const index = current.findIndex(
-          (fee) => fee.learner_name === saved.learner_name && fee.grade === saved.grade &&
+          (fee) => fee.learner_id === saved.learner_id && fee.grade === saved.grade &&
             fee.academic_year === saved.academic_year && fee.term === saved.term
         );
         if (index < 0) return [...current, saved].sort((a, b) => b.academic_year - a.academic_year || a.term - b.term || a.grade.localeCompare(b.grade) || a.learner_name.localeCompare(b.learner_name));
@@ -101,14 +117,18 @@ const AdminDashboard = ({ token, role }) => {   // accept role as prop
       });
       setFeeMessage(`Saved fees for ${saved.learner_name}, ${saved.academic_year} Term ${saved.term}.`);
       setFeeForm(emptyFeeForm(academicYear, term));
+      setSelectedLearner(null);
       try {
-        const refreshedDashboard = await getReports(token, academicYear, term);
+        const refreshedDashboard = await getReports(token, academicYear, term, reportOffset);
         setDashboard(refreshedDashboard);
       } catch (refreshError) {
         setError(`Fee record saved, but summary refresh failed: ${refreshError.message}`);
       }
     } catch (err) {
       setError(err.message || "Could not save fee record.");
+    } finally {
+      feePending.current = false;
+      setSavingFee(false);
     }
   };
 
@@ -120,14 +140,22 @@ const AdminDashboard = ({ token, role }) => {   // accept role as prop
   };
 
   const submitPayment = async (fee) => {
+    if (paymentsPending.current.has(fee.id)) return;
     const form = { ...emptyPaymentForm(), ...(paymentForms[fee.id] || {}) };
     setError("");
+    if (!Number.isFinite(Number(form.amount)) || Number(form.amount) <= 0 || !form.payment_date) {
+      setError("Enter a valid payment amount and date.");
+      return;
+    }
+    paymentsPending.current.add(fee.id);
+    setSavingPayments((current) => ({ ...current, [fee.id]: true }));
+    setPaymentMessages((current) => ({ ...current, [fee.id]: "" }));
     try {
       await recordFeePayment(fee.id, { ...form, amount: Number(form.amount) }, token);
       setPaymentForms((current) => ({ ...current, [fee.id]: emptyPaymentForm() }));
       setPaymentMessages((current) => ({ ...current, [fee.id]: "Payment recorded." }));
       const results = await Promise.allSettled([
-        getFees(token), getReports(token, academicYear, term), getFeePayments(fee.id, token),
+        getFees(token), getReports(token, academicYear, term, reportOffset), getFeePayments(fee.id, token),
       ]);
       if (results[0].status === "fulfilled") setFeeRecords(results[0].value);
       if (results[1].status === "fulfilled") setDashboard(results[1].value);
@@ -136,13 +164,16 @@ const AdminDashboard = ({ token, role }) => {   // accept role as prop
       if (refreshFailure) setError(`Payment recorded, but the display could not refresh: ${refreshFailure.reason.message}`);
     } catch (err) {
       setError(err.message || "Could not record payment.");
+    } finally {
+      paymentsPending.current.delete(fee.id);
+      setSavingPayments((current) => ({ ...current, [fee.id]: false }));
     }
   };
 
-  const loadPayments = async (feeId) => {
-    if (paymentsByFee[feeId]) return;
+  const loadPayments = async (feeId, offset = 0) => {
+    if (paymentsByFee[feeId]?.offset === offset) return;
     try {
-      const payments = await getFeePayments(feeId, token);
+      const payments = await getFeePayments(feeId, token, offset);
       setPaymentsByFee((current) => ({ ...current, [feeId]: payments }));
     } catch (err) {
       setError(err.message || "Could not load payment history.");
@@ -225,8 +256,8 @@ const AdminDashboard = ({ token, role }) => {   // accept role as prop
       {role === "admin" && (
         <div style={{ marginTop: "20px" }}>
           <h3>Export Reports</h3>
-          <button onClick={() => downloadReport("csv", token, academicYear, term)}>Download CSV</button>
-          <button onClick={() => downloadReport("pdf", token, academicYear, term)} style={{ marginLeft: "10px" }}>
+          <button onClick={() => downloadReport("csv", token, academicYear, term).catch((err) => setError(err.message))}>Download CSV</button>
+          <button onClick={() => downloadReport("pdf", token, academicYear, term).catch((err) => setError(err.message))} style={{ marginLeft: "10px" }}>
             Download PDF
           </button>
         </div>
@@ -235,6 +266,9 @@ const AdminDashboard = ({ token, role }) => {   // accept role as prop
       {/* Learners by Grade */}
       <section id="learner-records">
         <h2>Learners</h2>
+        <p>{dashboard?.total ?? 0} report records. School and class summaries include all records in the selected period.</p>
+        <button type="button" disabled={reportOffset === 0} onClick={() => setReportOffset(Math.max(0, reportOffset - 50))}>Previous reports</button>{" "}
+        <button type="button" disabled={reportOffset + 50 >= (dashboard?.total ?? 0)} onClick={() => setReportOffset(reportOffset + 50)}>Next reports</button>
         {Object.entries(dashboard?.grades || {}).map(([grade, learners]) => (
           <div key={grade} style={{ marginBottom: "30px" }}>
             <h3>{grade}</h3>
@@ -257,19 +291,19 @@ const AdminDashboard = ({ token, role }) => {   // accept role as prop
               </thead>
               <tbody>
                 {learners.map(l => (
-                  <tr key={l.learner_name}>
+                  <tr key={l.learner_id}>
                     <td>{l.learner_name}</td>
-                    <td>{l.marks.mathematics}</td>
-                    <td>{l.marks.english}</td>
-                    <td>{l.marks.kiswahili}</td>
-                    <td>{l.marks.total}</td>
-                    <td>{l.marks.average}</td>
-                    <td>{l.marks.status}</td>
-                    <td>{l.marks.rank}</td>
+                    <td>{l.marks?.mathematics ?? "—"}</td>
+                    <td>{l.marks?.english ?? "—"}</td>
+                    <td>{l.marks?.kiswahili ?? "—"}</td>
+                    <td>{l.marks?.total ?? "—"}</td>
+                    <td>{l.marks?.average ?? "—"}</td>
+                    <td>{l.marks?.status ?? "—"}</td>
+                    <td>{l.marks?.rank ?? "—"}</td>
                     <td>{l.fees.total_required}</td>
                     <td>{l.fees.total_paid}</td>
                     <td>{l.fees.total_balance}</td>
-                    <td><button type="button" onClick={() => downloadLearnerReport(l.learner_name, token, academicYear, term)}>PDF</button></td>
+                    <td><button type="button" onClick={() => downloadLearnerReport(l.learner_id, l.learner_name, token, academicYear, term, l.grade).catch((err) => setError(err.message))}>PDF</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -282,7 +316,11 @@ const AdminDashboard = ({ token, role }) => {   // accept role as prop
         <h2>Enter or update learner fees</h2>
         <p>Charges are stored for the selected academic year and term. Record each payment separately below.</p>
         <form onSubmit={handleFeeSubmit}>
-          <label>Learner name <input name="learner_name" value={feeForm.learner_name} onChange={handleFeeChange} required /></label>{" "}
+          <fieldset disabled={savingFee}>
+          <LearnerPicker token={token} value={selectedLearner} onChange={(learner) => {
+            setSelectedLearner(learner);
+            setFeeForm((current) => ({ ...current, learner_id: learner?.id || "", grade: learner?.class_name || "" }));
+          }} />
           <label>Grade <input name="grade" value={feeForm.grade} onChange={handleFeeChange} required /></label>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "8px", margin: "12px 0" }}>
             {feeCategories.map(([label, requiredField]) => (
@@ -292,8 +330,9 @@ const AdminDashboard = ({ token, role }) => {   // accept role as prop
               </fieldset>
             ))}
           </div>
-          <button type="submit">Save fee record</button>{" "}
-          <button type="button" onClick={() => setFeeForm(emptyFeeForm(academicYear, term))}>Clear</button>
+          <button type="submit">{savingFee ? "Saving fee record…" : "Save fee record"}</button>{" "}
+          <button type="button" onClick={() => { setFeeForm(emptyFeeForm(academicYear, term)); setSelectedLearner(null); }}>Clear</button>
+          </fieldset>
         </form>
         {feeMessage && <p role="status">{feeMessage}</p>}
         <h3>Fee records</h3>
@@ -305,6 +344,7 @@ const AdminDashboard = ({ token, role }) => {   // accept role as prop
               <td>{fee.learner_name}</td><td>{fee.grade}</td><td>{fee.academic_year || "—"}</td><td>{fee.term === 0 ? "Legacy" : `Term ${fee.term}`}</td>
               <td>{fee.total_required}</td><td>{fee.total_paid}</td><td>{fee.total_balance}</td>
               <td>
+                <fieldset disabled={savingPayments[fee.id]} aria-label={`Payment for ${fee.learner_name}`}>
                 <select aria-label="Payment category" value={paymentForm.category} onChange={(event) => handlePaymentChange(fee.id, "category", event.target.value)}>
                   {feeCategories.map(([label, field]) => <option key={field} value={field.replace("_required", "")}>{label}</option>)}
                 </select>{" "}
@@ -312,24 +352,28 @@ const AdminDashboard = ({ token, role }) => {   // accept role as prop
                 <input aria-label="Payment date" type="date" value={paymentForm.payment_date} onChange={(event) => handlePaymentChange(fee.id, "payment_date", event.target.value)} />
                 <input aria-label="Payment reference" placeholder="Receipt/reference" value={paymentForm.reference} onChange={(event) => handlePaymentChange(fee.id, "reference", event.target.value)} />
                 <input aria-label="Payment note" placeholder="Note (optional)" value={paymentForm.note} onChange={(event) => handlePaymentChange(fee.id, "note", event.target.value)} />{" "}
-                <button type="button" disabled={!paymentForm.amount || Number(paymentForm.amount) <= 0 || !paymentForm.payment_date} onClick={() => submitPayment(fee)}>Record payment</button>
+                <button type="button" disabled={savingPayments[fee.id] || !paymentForm.amount || Number(paymentForm.amount) <= 0 || !paymentForm.payment_date} onClick={() => submitPayment(fee)}>{savingPayments[fee.id] ? "Recording payment…" : "Record payment"}</button>
+                </fieldset>
                 {paymentMessages[fee.id] && <small role="status">{paymentMessages[fee.id]}</small>}
               </td>
               <td>
-                <button type="button" onClick={() => downloadFeeStatement(fee.id, fee.learner_name, token)}>PDF</button>
+                <button type="button" onClick={() => downloadFeeStatement(fee.id, fee.learner_name, token).catch((err) => setError(err.message))}>PDF</button>
                 <details onToggle={(event) => { if (event.currentTarget.open) loadPayments(fee.id); }}>
                   <summary>Payment history</summary>
                   {paymentsByFee[fee.id] ? (
-                    <ul>{paymentsByFee[fee.id].map((payment) => (
+                    <><ul>{paymentsByFee[fee.id].items.map((payment) => (
                       <li key={payment.id}>{payment.payment_date || "Date unavailable"} — {payment.category}: KES {payment.amount.toFixed(2)}{payment.reference ? ` (${payment.reference})` : ""}{payment.is_opening_balance ? " — migrated opening balance" : ""}</li>
                     ))}</ul>
+                    <button type="button" disabled={paymentsByFee[fee.id].offset === 0} onClick={() => loadPayments(fee.id, Math.max(0, paymentsByFee[fee.id].offset - 50))}>Previous payments</button>{" "}
+                    <button type="button" disabled={paymentsByFee[fee.id].offset + paymentsByFee[fee.id].limit >= paymentsByFee[fee.id].total} onClick={() => loadPayments(fee.id, paymentsByFee[fee.id].offset + 50)}>Next payments</button></>
                   ) : <p>Loading payment history…</p>}
                 </details>
               </td>
               <td>
                 <button type="button" onClick={() => {
+                  setSelectedLearner({ id: fee.learner_id, name: fee.learner_name, class_name: fee.grade });
                   setFeeForm({
-                  learner_name: fee.learner_name,
+                  learner_id: fee.learner_id,
                   grade: fee.grade,
                   academic_year: fee.academic_year,
                   term: fee.term,
@@ -380,7 +424,7 @@ function emptyPaymentForm() {
 
 function emptyFeeForm(academicYear, term) {
   return {
-    learner_name: "", grade: "",
+    learner_id: "", grade: "",
     academic_year: academicYear,
     term,
     pta_required: 0,

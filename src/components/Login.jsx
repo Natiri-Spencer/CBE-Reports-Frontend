@@ -1,9 +1,8 @@
 // src/Login.jsx
 import React, { useState } from "react";
-import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
-import { API_URL } from "../config";
+import { login } from "../api";
 
 
 function Login({ setToken, setRole }) {
@@ -18,13 +17,9 @@ function Login({ setToken, setRole }) {
 
     try {
       // FastAPI expects form-data for /auth/token
-      const res = await axios.post(
-        `${API_URL}/auth/token`,
-        new URLSearchParams({ username, password }),
-        { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
-      );
+      const res = await login(username, password);
 
-      const token = res.data.access_token;
+      const token = res.access_token;
       localStorage.setItem("token", token);
 
       // Decode JWT to extract role
@@ -48,7 +43,7 @@ function Login({ setToken, setRole }) {
 
       // ✅ Improved error handling: show backend message if available
       const msg =
-        err.response?.data?.detail ||
+        err.message || err.response?.data?.detail ||
         err.response?.data?.msg ||
         "❌ Invalid username or password";
       setError(msg);

@@ -1,3 +1,4 @@
+import AccountSecurity from "./AccountSecurity";
 import React, { useEffect, useState } from "react";
 import { getAdminDashboard } from "../api";
 import "./AdminHome.css";
@@ -93,6 +94,7 @@ export default function AdminHome({ token }) {
           ) : <p className="admin-home__empty">No admin activity has been recorded yet.</p>}
         </section>
       </div>
+      <AccountSecurity token={token} />
     </main>
   );
 }

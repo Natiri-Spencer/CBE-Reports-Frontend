@@ -1,3 +1,4 @@
+import { logout } from "./api";
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
@@ -28,7 +29,8 @@ function App() {
     else localStorage.removeItem("role");
   }, [role]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logout();
     localStorage.removeItem("token");
     localStorage.removeItem("role");
     setToken(null);

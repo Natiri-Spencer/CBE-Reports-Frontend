@@ -1,238 +1,50 @@
+import { rememberSession, endSession } from "./authSession";
+import { request, mutate } from "./contractClient";
 import { API_URL } from "./config";
-
 export const BASE_URL = API_URL;
 
-// Helper function to handle fetch + error parsing
-async function handleResponse(response, action) {
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`${action} failed: ${err}`);
-  }
-  return await response.json();
-}
+export const signup = (username, password, role = "teacher") => request("signup", { body: { username, password, role } });
+export const login = (username, password) => request("login", { body: { username, password } }).then(rememberSession);
+export const logout = endSession;
+export const getAcademicCalendar = (token) => request("get_academic_calendar", { token });
+export const getAdminDashboard = (token) => request("get_admin_dashboard", { token });
+export const getLearners = (token, query = {}) => request("list_learners", { token, query });
+export const createLearner = (record, token) => mutate("create_learner", record, token);
+export const getMarks = (token, academic_year, term, class_name, offset = 0, limit = 50) =>
+  request("list_marks", { token, query: { academic_year, term, class_name, offset, limit } });
+export const submitMarks = (students, token) => mutate("submit_marks", { students }, token);
+export const getFees = (token, academic_year, term) => request("list_fees", { token, query: { academic_year, term } });
+export const saveFee = (record, token) => mutate("save_fee", record, token);
+export const recordFeePayment = (fee_id, payment, token) => mutate("record_payment", payment, token, { fee_id });
+export const getFeePayments = (fee_id, token, offset = 0, limit = 50) =>
+  request("list_payments", { token, path: { fee_id }, query: { offset, limit } });
+export const getReports = (token, academic_year, term, offset = 0, limit = 50) =>
+  request("get_dashboard_report", { token, query: { academic_year, term, offset, limit } });
 
-// --- Signup ---
-export async function signup(username, password, role) {
-  try {
-    const response = await fetch(`${BASE_URL}/auth/signup`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password, role }),
-    });
-    return await handleResponse(response, "Signup");
-  } catch (err) {
-    console.error("❌ Signup error:", err.message);
-    throw err;
-  }
-}
-// --- Login ---
-export async function login(username, password) {
-  try {
-    const response = await fetch(`${BASE_URL}/auth/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ username, password }),
-    });
-    return await handleResponse(response, "Login");
-  } catch (err) {
-    console.error("❌ Login error:", err.message);
-    throw err;
-  }
-}
-
-// --- Logout ---
-export async function logout() {
-  try {
-    const response = await fetch(`${BASE_URL}/auth/logout`, { method: "POST" });
-    return await handleResponse(response, "Logout");
-  } catch (err) {
-    console.error("❌ Logout error:", err.message);
-    throw err;
-  }
-}
-
-// --- Download Report ---
-export async function downloadReport(format, token, academicYear, term) {
-  try {
-    const params = new URLSearchParams({ export: format });
-    if (academicYear !== undefined && academicYear !== null) params.set("academic_year", academicYear);
-    if (term !== undefined && term !== null) params.set("term", term);
-    const response = await fetch(`${BASE_URL}/reports/dashboard?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Download failed: ${err}`);
-    }
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `dashboard.${format}`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  } catch (err) {
-    console.error("❌ Download error:", err.message);
-    throw err;
-  }
-}
-
-
-// --- Reports ---
-export async function getReports(token, academicYear, term) {
-  try {
-    const params = new URLSearchParams();
-    if (academicYear !== undefined && academicYear !== null) params.set("academic_year", academicYear);
-    if (term !== undefined && term !== null) params.set("term", term);
-    const query = params.toString();
-    const response = await fetch(`${BASE_URL}/reports/dashboard${query ? `?${query}` : ""}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return await handleResponse(response, "Fetch reports");
-  } catch (err) {
-    console.error("❌ Reports error:", err.message);
-    throw err;
-  }
-}
-
-export async function getFees(token, academicYear, term) {
-  const params = new URLSearchParams();
-  if (academicYear !== undefined && academicYear !== null) params.set("academic_year", academicYear);
-  if (term !== undefined && term !== null) params.set("term", term);
-  const query = params.toString();
-  const response = await fetch(`${BASE_URL}/fees${query ? `?${query}` : ""}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return await handleResponse(response, "Fetch fees");
-}
-
-export async function getAcademicCalendar(token) {
-  const response = await fetch(`${BASE_URL}/fees/calendar`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return await handleResponse(response, "Fetch academic calendar");
-}
-
-export async function getAdminDashboard(token) {
-  const response = await fetch(`${BASE_URL}/admin/dashboard`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return await handleResponse(response, "Fetch admin dashboard");
-}
-
-export async function recordFeePayment(feeId, payment, token) {
-  const response = await fetch(`${BASE_URL}/fees/records/${feeId}/payments`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payment),
-  });
-  return await handleResponse(response, "Record fee payment");
-}
-
-export async function getFeePayments(feeId, token) {
-  const response = await fetch(`${BASE_URL}/fees/records/${feeId}/payments`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return await handleResponse(response, "Fetch payment history");
-}
-
-export async function submitMarks(students, token) {
-  const response = await fetch(`${BASE_URL}/marks/submit`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ students }),
-  });
-  return await handleResponse(response, "Save marks");
-}
-
-export async function getMarks(token) {
-  const response = await fetch(`${BASE_URL}/marks`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return await handleResponse(response, "Fetch marks");
-}
-
-export async function saveFee(record, token) {
-  const response = await fetch(`${BASE_URL}/fees`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(record),
-  });
-  return await handleResponse(response, "Save fee record");
-}
-
-async function downloadFile(url, filename, token, action) {
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) {
-    throw new Error(`${action} failed: ${await response.text()}`);
-  }
-  const blob = await response.blob();
-  const objectUrl = window.URL.createObjectURL(blob);
+async function download(operation, filename, options) {
+  const blob = await request(operation, { ...options, download: true });
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.URL.revokeObjectURL(objectUrl);
-}
-
-export function downloadFeeStatement(feeId, learnerName, token) {
-  return downloadFile(
-    `${BASE_URL}/fees/records/${feeId}/statement.pdf`,
-    `${learnerName.replace(/[^a-z0-9_-]+/gi, "_")}-fee-statement.pdf`,
-    token,
-    "Download fee statement"
-  );
-}
-
-export function downloadLearnerReport(learnerName, token, academicYear, term) {
-  const learner = encodeURIComponent(learnerName);
-  const params = new URLSearchParams();
-  if (academicYear !== undefined && academicYear !== null) params.set("academic_year", academicYear);
-  if (term !== undefined && term !== null) params.set("term", term);
-  const query = params.toString();
-  return downloadFile(
-    `${BASE_URL}/reports/learner/${learner}/pdf${query ? `?${query}` : ""}`,
-    `${learnerName.replace(/[^a-z0-9_-]+/gi, "_")}-report.pdf`,
-    token,
-    "Download learner report"
-  );
-}
-
-// --- Download Marks Report ---
-export async function downloadMarks(format, token) {
   try {
-    const endpoint = format === "csv" ? "/marks/export" : "/marks/export/pdf";
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Download failed: ${err}`);
-    }
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `marks_export.${format}`);
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
+  } finally {
     link.remove();
-  } catch (err) {
-    console.error("❌ Download error:", err.message);
-    throw err;
+    URL.revokeObjectURL(url);
   }
 }
+
+export const downloadReport = (format, token, academic_year, term) =>
+  download("get_dashboard_report", `dashboard.${format}`, { token, query: { academic_year, term, export: format } });
+export const downloadMarks = (format, token, academic_year, term, class_name) =>
+  download(format === "csv" ? "download_marks_csv" : "download_marks_pdf", `marks.${format}`, { token, query: { academic_year, term, class_name } });
+export const downloadFeeStatement = (fee_id, name, token) =>
+  download("download_fee_statement", `${name.replace(/[^a-z0-9_-]+/gi, "_")}-fees.pdf`, { token, path: { fee_id } });
+export const downloadLearnerReport = (learner_id, name, token, academic_year, term, class_name) =>
+  download("download_learner_report", `${name.replace(/[^a-z0-9_-]+/gi, "_")}-report.pdf`, { token, path: { learner_id }, query: { academic_year, term, class_name } });
+
+export const listAccounts = (token, offset = 0) => request("list_accounts", { token, query: { offset, limit: 50 } });
+export const setAccountStatus = (token, user_id, is_active) => request("set_account_status", { token, path: { user_id }, body: { is_active } });
+export const getAuthenticationMonitoring = (token) => request("authentication_monitoring", { token });

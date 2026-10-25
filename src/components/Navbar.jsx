@@ -1,17 +1,19 @@
 // src/components/Navbar.jsx
-import React from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function Navbar({ role, onLogout }) {
   const navigate = useNavigate();
 
-  function handleLogout() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role"); // ✅ clear role too
-    if (onLogout) onLogout(); // reset app state
-    navigate("/login");
+  const [logoutError, setLogoutError] = useState("");
+  async function handleLogout() {
+    try {
+      await onLogout?.();
+      navigate("/login");
+    } catch {
+      setLogoutError("Could not revoke the session. Check your connection and retry logout.");
+    }
   }
-
   return (
     <nav className="app-nav"
       style={{
@@ -47,6 +49,7 @@ export default function Navbar({ role, onLogout }) {
         )}
       </div>
 
+      {logoutError && <p role="alert">{logoutError}</p>}
       {/* Logout button if logged in */}
       {role && (
         <button
