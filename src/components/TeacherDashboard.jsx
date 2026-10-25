@@ -1,104 +1,75 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import MarksForm from "./MarksForm";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable"; // correct import
+import { downloadMarks, getMarks } from "../api";
 
 export default function TeacherDashboard({ token, onLogout }) {
   const [history, setHistory] = useState([]);
+  const [loadError, setLoadError] = useState("");
 
-  // ✅ Shared headers
+  useEffect(() => {
+    getMarks(token)
+      .then(setHistory)
+      .catch((err) => setLoadError(err.message || "Could not load saved marks."));
+  }, [token]);
+
+  const fields = [
+    "name", "mathematics", "pretechnical", "cre", "agriculture", "integratedScience",
+    "socialStudies", "english", "kiswahili", "creativeArts", "total", "average", "status", "rank",
+  ];
   const headers = [
-    "Name",
-    "Mathematics",
-    "English",
-    "Kiswahili",
-    "Creative Arts",
-    "Integrated Science",
-    "Pretechnical",
-    "Agriculture",
-    "Social Studies",
-    "CRE",
-    "Total",
-    "Average",
-    "Grade Band",
-    "Comments",
+    "Name", "Mathematics", "Pretechnical", "CRE", "Agriculture", "Integrated Science",
+    "Social Studies", "English", "Kiswahili", "Creative Arts", "Total", "Average", "Status", "Rank",
   ];
 
   const handleResults = (newResults) => {
-    setHistory((prev) => [...prev, ...newResults]);
+    setHistory((prev) => [
+      ...prev.filter((student) => !newResults.some((result) => result.name === student.name)),
+      ...newResults,
+    ].sort((a, b) => a.rank - b.rank));
+    getMarks(token).then((records) => {
+      setHistory(records);
+      setLoadError("");
+    }).catch((err) => setLoadError(err.message || "Could not refresh saved marks."));
   };
 
-  // PDF export
-  const downloadPDF = () => {
-    if (history.length === 0) return;
-
+  // Local PDF export
+  const downloadPDF = async (students = history) => {
+    if (students.length === 0) return;
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ]);
     const doc = new jsPDF();
     doc.text("Teacher Marks Submission History", 14, 16);
-
-    const tableRows = history.map((student) => [
-      student.name,
-      student.mathematics,
-      student.english,
-      student.kiswahili,
-      student.creativeArts,
-      student.integratedScience,
-      student.pretechnical,
-      student.agriculture,
-      student.socialStudies,
-      student.cre,
-      student.total,
-      student.average,
-      student.gradeBand,
-      student.comments,
+    const tableRows = students.map((student) => [
+      student.name, student.mathematics, student.pretechnical, student.cre, student.agriculture,
+      student.integratedScience, student.socialStudies, student.english, student.kiswahili,
+      student.creativeArts, student.total, student.average, student.status, student.rank,
     ]);
-
-    autoTable(doc, {
-      head: [headers],
-      body: tableRows,
-      startY: 20,
-    });
-
+    autoTable(doc, { head: [headers], body: tableRows, startY: 20 });
     doc.save("marks-history.pdf");
   };
 
-  // CSV export
+  // Local CSV export
   const downloadCSV = () => {
     if (history.length === 0) return;
-
     const rows = history.map((student) => [
-      `"${student.name}"`,
-      student.mathematics,
-      student.english,
-      student.kiswahili,
-      student.creativeArts,
-      student.integratedScience,
-      student.pretechnical,
-      student.agriculture,
-      student.socialStudies,
-      student.cre,
-      student.total,
-      student.average,
-      `"${student.gradeBand}"`,
-      `"${student.comments}"`,
+      `"${student.name}"`, student.mathematics, student.pretechnical, student.cre, student.agriculture,
+      student.integratedScience, student.socialStudies, student.english, student.kiswahili,
+      student.creativeArts, student.total, student.average, `"${student.status}"`, student.rank,
     ]);
-
-    let csvContent =
-      "data:text/csv;charset=utf-8," +
-      headers.join(",") +
-      "\n" +
-      rows.map((r) => r.join(",")).join("\n");
-
+    let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map((r) => r.join(",")).join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "marks-history.csv");
+    link.href = encodedUri;
+    link.download = "marks-history.csv";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <div style={{ padding: "20px" }}>
+    <main className="page-shell teacher-dashboard">
       <h2>Teacher Dashboard</h2>
       <p>Welcome! You can enter marks for multiple students below.</p>
 
@@ -109,37 +80,25 @@ export default function TeacherDashboard({ token, onLogout }) {
           <h3>Submission History</h3>
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1200px" }}>
             <thead>
-              <tr>
-                {headers.map((col) => (
-                  <th key={col} style={thStyle}>{col}</th>
-                ))}
-              </tr>
+              <tr>{headers.map((col) => <th key={col} style={thStyle}>{col}</th>)}<th style={thStyle}>Report</th></tr>
             </thead>
             <tbody>
               {history.map((student, idx) => (
                 <tr key={idx}>
-                  <td style={tdStyle}>{student.name}</td>
-                  <td style={tdStyle}>{student.mathematics}</td>
-                  <td style={tdStyle}>{student.english}</td>
-                  <td style={tdStyle}>{student.kiswahili}</td>
-                  <td style={tdStyle}>{student.creativeArts}</td>
-                  <td style={tdStyle}>{student.integratedScience}</td>
-                  <td style={tdStyle}>{student.pretechnical}</td>
-                  <td style={tdStyle}>{student.agriculture}</td>
-                  <td style={tdStyle}>{student.socialStudies}</td>
-                  <td style={tdStyle}>{student.cre}</td>
-                  <td style={tdStyle}>{student.total}</td>
-                  <td style={tdStyle}>{student.average}</td>
-                  <td style={tdStyle}>{student.gradeBand}</td>
-                  <td style={tdStyle}>{student.comments}</td>
+                  {fields.map((field) => (
+                    <td key={field} style={tdStyle}>{student[field] ?? "—"}</td>
+                  ))}
+                  <td style={tdStyle}><button type="button" onClick={() => downloadPDF([student]).catch((err) => setLoadError(err.message))}>PDF</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
 
           <div style={{ marginTop: "15px" }}>
-            <button onClick={downloadPDF} style={pdfBtnStyle}>Download PDF</button>
-            <button onClick={downloadCSV} style={csvBtnStyle}>Download CSV</button>
+            <button onClick={() => downloadPDF().catch((err) => setLoadError(err.message))} style={pdfBtnStyle}>Download Local PDF</button>
+            <button onClick={downloadCSV} style={csvBtnStyle}>Download Local CSV</button>
+            <button onClick={() => downloadMarks("pdf", token).catch((err) => setLoadError(err.message))} style={pdfBtnStyle}>Download DB PDF</button>
+            <button onClick={() => downloadMarks("csv", token).catch((err) => setLoadError(err.message))} style={csvBtnStyle}>Download DB CSV</button>
           </div>
         </div>
       )}
@@ -147,37 +106,14 @@ export default function TeacherDashboard({ token, onLogout }) {
       <div style={{ marginTop: "20px" }}>
         <button onClick={onLogout} style={logoutBtnStyle}>Logout</button>
       </div>
-    </div>
+      {loadError && <p role="alert" style={{ color: "red" }}>{loadError}</p>}
+    </main>
   );
 }
 
 const thStyle = { border: "1px solid #ccc", padding: "6px", background: "#f2f2f2" };
 const tdStyle = { border: "1px solid #ccc", padding: "6px", textAlign: "center" };
 
-const pdfBtnStyle = {
-  background: "#4CAF50",
-  color: "white",
-  border: "none",
-  padding: "8px 16px",
-  cursor: "pointer",
-  borderRadius: "4px",
-  marginRight: "10px",
-};
-
-const csvBtnStyle = {
-  background: "#2196F3",
-  color: "white",
-  border: "none",
-  padding: "8px 16px",
-  cursor: "pointer",
-  borderRadius: "4px",
-};
-
-const logoutBtnStyle = {
-  background: "red",
-  color: "white",
-  border: "none",
-  padding: "8px 16px",
-  cursor: "pointer",
-  borderRadius: "4px",
-};
+const pdfBtnStyle = { background: "#4CAF50", color: "white", border: "none", padding: "8px 16px", cursor: "pointer", borderRadius: "4px", marginRight: "10px" };
+const csvBtnStyle = { background: "#2196F3", color: "white", border: "none", padding: "8px 16px", cursor: "pointer", borderRadius: "4px", marginRight: "10px" };
+const logoutBtnStyle = { background: "red", color: "white", border: "none", padding: "8px 16px", cursor: "pointer", borderRadius: "4px" };

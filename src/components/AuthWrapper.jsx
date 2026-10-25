@@ -1,38 +1,45 @@
-import React, { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 
-function AuthWrapper({ children, setRole, setToken }) {
+function AuthWrapper({ children, token, setRole, setToken }) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-
     if (token) {
       try {
         const decoded = jwtDecode(token);
         const role = decoded?.role;
+        if (!["teacher", "admin"].includes(role) || !Number.isFinite(decoded.exp) || decoded.exp * 1000 <= Date.now()) {
+          throw new Error("Session expired or invalid. Please log in again.");
+        }
 
         setToken(token);
         setRole(role);
 
         // Redirect based on role
-        if (role === "teacher") {
-          navigate("/teacher");
-        } else if (role === "admin") {
-          navigate("/admin");
-        } else {
-          navigate("/login");
+        if (["/", "/login", "/signup"].includes(pathname)) {
+          navigate(role === "teacher" ? "/teacher" : "/admin", { replace: true });
         }
+        const timer = setTimeout(() => {
+          localStorage.removeItem("token");
+          localStorage.removeItem("role");
+          setToken(null);
+          setRole(null);
+          navigate("/login", { replace: true });
+        }, Math.min(decoded.exp * 1000 - Date.now(), 2147483647));
+        return () => clearTimeout(timer);
       } catch (err) {
         console.error("❌ Invalid token:", err);
         localStorage.removeItem("token");
+        localStorage.removeItem("role");
         setToken(null);
         setRole(null);
         navigate("/login");
       }
     }
-  }, [setRole, setToken, navigate]);
+  }, [token, pathname, setRole, setToken, navigate]);
 
   return children;
 }

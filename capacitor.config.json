@@ -1,0 +1,11 @@
+{
+  "appId": "com.natirispencer.cbereports",
+  "appName": "CBE Reports",
+  "webDir": "build",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

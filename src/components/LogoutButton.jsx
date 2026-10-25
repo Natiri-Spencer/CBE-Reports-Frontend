@@ -1,8 +1,8 @@
 import React from "react";
+import { API_URL } from "../config";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const API_URL = process.env.REACT_APP_API_URL;
 
 function LogoutButton({ onLogout }) {
   const navigate = useNavigate();

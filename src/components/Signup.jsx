@@ -1,14 +1,13 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
-import { jwtDecode } from "jwt-decode";   // ✅ single correct import
+import { jwtDecode } from "jwt-decode";
+import { API_URL } from "../config";
 
-const API_URL = process.env.REACT_APP_API_URL;
 
 function Signup({ setToken, setRole }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setUserRole] = useState("teacher"); // default role
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
@@ -21,7 +20,7 @@ function Signup({ setToken, setRole }) {
       await axios.post(`${API_URL}/auth/signup`, {
         username,
         password,
-        role,
+        role: "teacher",
       });
 
       // 2. Immediately log them in
@@ -71,7 +70,7 @@ function Signup({ setToken, setRole }) {
   }
 
   return (
-    <div>
+    <main className="auth-page">
       <h2>Signup</h2>
       <form onSubmit={handleSubmit}>
         <div>
@@ -92,13 +91,7 @@ function Signup({ setToken, setRole }) {
             required
           />
         </div>
-        <div>
-          <label>Role</label>
-          <select value={role} onChange={(e) => setUserRole(e.target.value)}>
-            <option value="teacher">Teacher</option>
-            <option value="admin">Admin</option>
-          </select>
-        </div>
+        <p>New accounts are created with teacher access. Contact an administrator for admin access.</p>
         <button type="submit">Signup</button>
       </form>
 
@@ -107,7 +100,7 @@ function Signup({ setToken, setRole }) {
       <p>
         Already have an account? <Link to="/login">Login here</Link>
       </p>
-    </div>
+    </main>
   );
 }
 

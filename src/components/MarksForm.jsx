@@ -1,71 +1,64 @@
 import React, { useState } from "react";
+import { submitMarks } from "../api";
 
 export default function MarksForm({ token, onResults }) {
   const [name, setName] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [subjects, setSubjects] = useState({
     mathematics: "",
     english: "",
     kiswahili: "",
     creativeArts: "",
-    integratedScience: "",
+    integrated_science: "",
     pretechnical: "",
     agriculture: "",
-    socialStudies: "",
+    social_studies: "",
     cre: "",
   });
-  const [comments, setComments] = useState("");
 
   const handleChange = (subject, value) => {
     setSubjects((prev) => ({ ...prev, [subject]: value }));
   };
 
-  const getGradeBand = (avg) => {
-    if (avg >= 90) return "EE1 ";
-    if (avg >= 67) return "EE2 ";
-    if (avg >= 54) return "ME1 ";
-    if (avg >= 45) return "ME2 ";
-    if (avg >= 31) return "AE1 ";
-    if (avg >= 21) return "AE2 ";
-    if (avg >= 11) return "BE1 ";
-    return "BE2 (0-9)";
-  };
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    if (!name.trim()) {
+      setError("Enter the learner's name.");
+      return;
+    }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+    const invalidScore = Object.entries(subjects).find(
+      ([, value]) => value === "" || !Number.isFinite(Number(value))
+    );
+    if (invalidScore) {
+      setError("Enter a score for every subject before submitting.");
+      return;
+    }
 
-    // Convert subject scores to numbers
     const scores = Object.fromEntries(
-      Object.entries(subjects).map(([key, val]) => [key, parseInt(val) || 0])
+      Object.entries(subjects).map(([key, value]) => [key, Number(value)])
     );
 
-    const total = Object.values(scores).reduce((acc, val) => acc + val, 0);
-    const average = total / Object.keys(scores).length;
-    const gradeBand = getGradeBand(average);
-
-    const newResult = {
-      name,
-      ...scores,
-      total,
-      average: average.toFixed(2),
-      gradeBand,
-      comments,
+    // Payload must match FastAPI schema: { students: [ { ... } ] }
+    const payload = {
+      students: [
+        {
+          name,
+          ...scores,
+        },
+      ],
     };
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/marks/submit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(newResult),
-      });
-
-      await res.json();
+      const data = await submitMarks(payload.students, token);
 
       if (onResults) {
-        onResults([newResult]);
+        onResults(data.results || []);
       }
+      setMessage(data.message || "Marks saved successfully.");
 
       // Reset form
       setName("");
@@ -74,33 +67,40 @@ export default function MarksForm({ token, onResults }) {
         english: "",
         kiswahili: "",
         creativeArts: "",
-        integratedScience: "",
+        integrated_science: "",
         pretechnical: "",
         agriculture: "",
-        socialStudies: "",
+        social_studies: "",
         cre: "",
       });
-      setComments("");
     } catch (err) {
       console.error("❌ Submission failed:", err);
+      setError(err.message || "Submission failed. Check your connection and try again.");
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginTop: "20px" }}>
-      <div>
-        <label>
+    <section className="marks-form">
+      <form onSubmit={handleSubmit}>
+        <label className="form-field">
           Student Name:
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
         </label>
-      </div>
 
       {Object.keys(subjects).map((subject) => (
         <div key={subject}>
-          <label>
-            {subject.charAt(0).toUpperCase() + subject.slice(1)}:
+          <label className="form-field">
+            {subject.replace("_", " ").replace(/^\w/, (c) => c.toUpperCase())}:
             <input
               type="number"
+              min="0"
+              max="100"
+              step="0.01"
               value={subjects[subject]}
               onChange={(e) => handleChange(subject, e.target.value)}
               required
@@ -108,13 +108,6 @@ export default function MarksForm({ token, onResults }) {
           </label>
         </div>
       ))}
-
-      <div>
-        <label>
-          Comments:
-          <textarea value={comments} onChange={(e) => setComments(e.target.value)} />
-        </label>
-      </div>
 
       <button
         type="submit"
@@ -130,6 +123,9 @@ export default function MarksForm({ token, onResults }) {
       >
         Submit Marks
       </button>
-    </form>
+      </form>
+      {message && <p role="status" style={{ color: "green" }}>{message}</p>}
+      {error && <p role="alert" style={{ color: "red" }}>{error}</p>}
+    </section>
   );
 }

@@ -7,10 +7,12 @@ import Signup from "./components/Signup";
 import TeacherDashboard from "./components/TeacherDashboard";
 import MarksForm from "./components/MarksForm";
 import AdminDashboard from "./components/AdminDashboard";
+import AdminHome from "./components/AdminHome";
 import AuthWrapper from "./components/AuthWrapper";
 import About from "./components/About";
 import Navbar from "./components/Navbar";
-import ErrorBoundary from "./components/ErrorBoundary"; // ✅ new import
+import ErrorBoundary from "./components/ErrorBoundary";
+import "./mobile.css";
 
 function App() {
   const [token, setToken] = useState(() => localStorage.getItem("token"));
@@ -36,7 +38,7 @@ function App() {
   return (
     <Router>
       <Navbar role={role} onLogout={handleLogout} />
-      <AuthWrapper setRole={setRole} setToken={setToken}>
+      <AuthWrapper token={token} setRole={setRole} setToken={setToken}>
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<Home />} />
@@ -44,19 +46,22 @@ function App() {
           <Route path="/signup" element={<Signup setToken={setToken} setRole={setRole} />} />
           <Route path="/about" element={<About />} />
           <Route
-            path="/marks"
+            path="/teacher/marks"
             element={
-              <ErrorBoundary>
-                <MarksForm />
-              </ErrorBoundary>
+              token && role === "teacher" ? (
+                <ErrorBoundary><MarksForm token={token} /></ErrorBoundary>
+              ) : (
+                <Navigate to="/login" replace />
+              )
             }
           />
+          <Route path="/marks" element={<Navigate to="/teacher/marks" replace />} />
 
           {/* Protected routes */}
           <Route
             path="/teacher"
             element={
-              role === "teacher" ? (
+              token && role === "teacher" ? (
                 <ErrorBoundary>
                   <TeacherDashboard token={token} onLogout={handleLogout} />
                 </ErrorBoundary>
@@ -68,9 +73,21 @@ function App() {
           <Route
             path="/admin"
             element={
-              role === "admin" ? (
+              token && role === "admin" ? (
                 <ErrorBoundary>
-                  <AdminDashboard token={token} onLogout={handleLogout} />
+                  <AdminHome token={token} />
+                </ErrorBoundary>
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+          <Route
+            path="/admin/finance"
+            element={
+              token && role === "admin" ? (
+                <ErrorBoundary>
+                  <AdminDashboard token={token} role={role} onLogout={handleLogout} />
                 </ErrorBoundary>
               ) : (
                 <Navigate to="/login" replace />

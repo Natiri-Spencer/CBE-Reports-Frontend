@@ -1,0 +1,27 @@
+name: Frontend CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:ci
+      - run: npm run build
+        env:
+          VITE_API_URL: https://api.example.invalid
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npx cap sync android
+      - run: ./gradlew assembleDebug
+        working-directory: android

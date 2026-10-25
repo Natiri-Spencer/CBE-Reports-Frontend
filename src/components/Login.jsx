@@ -1,9 +1,10 @@
+// src/Login.jsx
 import React, { useState } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
-import { jwtDecode } from "jwt-decode";   // ✅ named import
+import { jwtDecode } from "jwt-decode";
+import { API_URL } from "../config";
 
-const API_URL = process.env.REACT_APP_API_URL;
 
 function Login({ setToken, setRole }) {
   const [username, setUsername] = useState("");
@@ -55,7 +56,7 @@ function Login({ setToken, setRole }) {
   }
 
   return (
-    <div>
+    <main className="auth-page">
       <h2>Login</h2>
       <form onSubmit={handleSubmit}>
         <div>
@@ -86,7 +87,7 @@ function Login({ setToken, setRole }) {
       <p>
         Don’t have an account? <Link to="/signup">Sign up here</Link>
       </p>
-    </div>
+    </main>
   );
 }
 

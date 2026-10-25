@@ -1,53 +1,57 @@
-echo "# 📊 CBE Reports - Frontend
+# CBE Reports frontend
 
-This is the **React frontend** for the CBE Reports system.  
-It provides a user-friendly interface for students, teachers, and administrators to interact with the backend services.
+React client for entering learner marks, reviewing performance, managing fee
+records, and downloading reports from the CBE Reports API.
 
-## 🚀 Features
-- Student signup/login with JWT authentication
-- Dashboard for performance and fee reports
-- Forms for entering marks and managing student data
-- Integration with FastAPI backend
+## Requirements
 
-## 🛠️ Tech Used
-- React
-- JavaScript (ES6+)
+- Node.js 22 or newer
 - npm
-- Axios
-- React Router
-- HTML5 / CSS3
-- Environment Variables (.env)
+- A running CBE Reports backend
 
-## 📂 Project Structure
-student_reports_frontend/
-├── public/
-│   └── index.html
-├── src/
-│   ├── App.jsx
-│   ├── App.js
-│   ├── api.js
-│   ├── components/
-│   ├── index.js
-│   └── index.jsx
-├── .env
-├── .gitignore
-├── package.json
-├── package-lock.json
+## Local setup
 
-## ⚙️ Setup
-1. Clone the repo:
-   git clone https://github.com/Natiri-Spencer/CBE-Reports-Frontend.git
-   cd CBE-Reports-Frontend
+```powershell
+Copy-Item .env.example .env
+npm ci
+npm start
+```
 
-2. Install dependencies:
-   npm install
+`VITE_API_URL` must point to the backend. Use an HTTPS URL for deployed
+web and Android builds; `127.0.0.1` only works when the API runs on the same
+computer as the browser.
 
-3. Start development server:
-   npm start
+## Verification
 
-## 🔗 Related Repositories
-- Backend (FastAPI): https://github.com/Natiri-Spencer/CBE-Reports
+```powershell
+npm run test:ci
+npm run build
+```
 
-## 👨‍💻 Author
-Developed by Spencer Natiri
-" | Out-File -FilePath README.md -Encoding utf8 -NoClobber
+The application has one entry point, `src/App.jsx`. Teacher and administrator
+routes require both an access token and the matching role.
+
+## Related repository
+
+- Backend: https://github.com/Natiri-Spencer/CBE-Reports
+
+## Android
+
+The Android client uses Capacitor and targets API 36. Before creating a mobile
+build, set `VITE_API_URL` to the deployed HTTPS backend; a phone cannot
+reach the development API through `127.0.0.1`.
+
+```powershell
+npm run android:sync
+Set-Location android
+.\gradlew.bat assembleDebug
+```
+
+The debug APK is written under `android/app/build/outputs/apk/debug`. Open the
+native project with `npm run android:open` when Android Studio is installed.
+
+## Repository structure
+
+The frontend and backend are maintained as two independent Git repositories.
+Clone this repository beside `student_reports_backend`; do not initialize a
+third Git repository around both folders. Use Node 22, recorded in `.nvmrc`.
