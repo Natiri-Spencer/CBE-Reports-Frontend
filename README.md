@@ -3,6 +3,17 @@
 React client for entering learner marks, reviewing performance, managing fee
 records, and downloading reports from the CBE Reports API.
 
+## Tech stack
+
+- React and JavaScript
+- Vite and npm
+- React Router
+- Fetch and Axios
+- AJV contract validation
+- HTML and CSS
+- Capacitor for Android
+- Environment-based configuration
+
 ## Requirements
 
 - Node.js 22 or newer
